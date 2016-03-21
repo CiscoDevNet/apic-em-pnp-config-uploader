@@ -2,17 +2,18 @@
 Tool for the APIC-EM PnP App to add devices and upload their configs
 
 # Usage
+```usage
 apic-em-pnp-config-uploader.py [-h] -s SERVER -u USERNAME -p PASSWORD
                                       [-d] [--clear-site]
                                       [filelist [filelist ...]]
 
 Upload configs to APIC-EM and create corresponding ZTD rules.
 
-positional arguments:
+Positional arguments:
   filelist              Config file(s) or path to config files (need to end in
                         .txt)
 
-optional arguments:
+Optional arguments:
   -h, --help            show this help message and exit
   -s SERVER, --server SERVER
                         Server hostname or IP of APIC-EM
@@ -22,7 +23,8 @@ optional arguments:
                         Password to login to APIC-EM
   -d, --debug           Enable debug mode
   --clear-site          Clear all rules from site first
-  
+```
+
 Example: ./apic-em-pnp-config-uploader.py -s 10.0.0.1 -u admin -p cisco switch1.txt
 
 # Sample Config
@@ -30,6 +32,7 @@ This tool needs some additional information about the device it is going to add,
 
 Minimal working config file:
 
+```sample-config
 !! Needed for APIC-EM PNP !!
 ! SERIAL FAC00000001
 ! SITE SITE1
@@ -40,3 +43,4 @@ hostname Switch1
 !
 ! [...]
 !
+```
