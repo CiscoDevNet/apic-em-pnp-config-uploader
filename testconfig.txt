@@ -1,0 +1,13 @@
+!! Needed for APIC-EM ZTD !!
+! SERIAL FAC056852C0
+! SITE RMA-TOOL
+! MODEL WS-C2960S-F48TS-L
+!! -------------------- !!
+version 15.2
+no service pad
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname CI2960SF_1
+!

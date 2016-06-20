@@ -20,7 +20,7 @@
 ################################################################################
 
 #AUTHOR: Tobias Huelsdau, <thulsdau@cisco.com>
-#VERSION 2016.03.21.a
+#VERSION 2016.06.18.a
 
 APIC_BASE_URL = 'https://%s:443/api/v1/'
 DEBUG = True
@@ -135,7 +135,7 @@ def login(username,password):
 
 def get_siteID(siteName):
     """Get ID of ZTD site by site name from APIC-EM ZTD Module"""
-    URL = APIC_URL + 'ztd-site?offset=1&limit=500'
+    URL = APIC_URL + 'pnp-project?siteName=%s&offset=1&limit=500' % siteName
     response = apic_connect(URL)
     response = response['response']
     for site in response:
@@ -145,7 +145,7 @@ def get_siteID(siteName):
 
 def get_all_sites():
     """Return list of all sites present in APIC-EM"""
-    URL = APIC_URL + 'ztd-site?offset=1&limit=500'
+    URL = APIC_URL + 'pnp-project?offset=1&limit=500'
     response = apic_connect(URL)
     response = response['response']
     sites = {}
@@ -155,23 +155,30 @@ def get_all_sites():
 
 def create_site(siteName):
     """Create new ZTD Site"""
-    URL = APIC_URL + 'ztd-site'
-    data = {'siteName':siteName}
+    URL = APIC_URL + 'pnp-project'
+    data = [{'siteName':siteName}]
     json_data = json.dumps(data)
     response = apic_connect(URL,'POST',json_data)
     response = response['response']
-    return response['taskId'],response['url']
+    #Retrieve site with all data
+    URL = APIC_URL + 'pnp-project?siteName=%s&offset=1&limit=500' % siteName
+    response = apic_connect(URL)
+    response = response['response']
+    for site in response:
+        return site
 
 def upload_config(fileName,config,configID=None):
     """Upload config as fileName to APIC-EM, return ID"""
     URL = APIC_URL + 'file/config'
-    fileName = os.path.basename(fileName)
+    verb = "POST"
+    fileName = os.path.basename(fileName)    
     if configID:
         URL = URL + '/' + configID
+        verb = "PUT"
     fields = {'configPreference': fileName} 
     files = {'fileUpload': {'filename': fileName, 'content': config, 'mimetype':'text/plain'}}
     data, headers = encode_multipart(fields, files)
-    response = apic_connect(URL, "POST", data, headers)
+    response = apic_connect(URL, verb, data, headers)
     response = response['response']
     return response['id']
 
@@ -188,11 +195,11 @@ def get_all_images():
     return images
     
 
-def create_ZTD_rule(siteName, serialNumber, deviceName, productID, configID, imageID=None):
+def create_ZTD_rule(projectID, siteName, serialNumber, deviceName, productID, configID, imageID=None):
     """Create a new ZTD rule/device in APIC-EM, return TaskId and TaskURL"""
-    URL = APIC_URL + 'ztd-site/device'
-    data = {"hostName": deviceName,"serialNumber": serialNumber, 
-            "platformId": productID,"site": siteName, "configId": configID, "pkiEnabled": False}
+    URL = APIC_URL + 'pnp-project/%s/device' % projectID
+    data = [{"hostName": deviceName,"serialNumber": serialNumber, 
+            "platformId": productID,"site": siteName, "configId": configID, "pkiEnabled": False}]
     if imageID:
         data['imageId'] = imageID
     json_data = json.dumps(data)
@@ -200,26 +207,25 @@ def create_ZTD_rule(siteName, serialNumber, deviceName, productID, configID, ima
     response = response['response']
     if response.has_key('errorCode'):
         print_debug('  Error creating ZTD rule: %s' % response.get('detail',''))
-    sys.exit(1)
     return response['taskId'],response['url']
 
-def update_ZTD_rule(deviceID, updateData):
+def update_ZTD_rule(projectID, deviceID, updateData):
     """Update ZTD rule"""
-    URL = APIC_URL + 'ztd-site/device'
+    URL = APIC_URL + 'pnp-project/%s/device' % projectID
     updateData['id'] = deviceID
-    json_data = json.dumps(updateData)
+    json_data = json.dumps([updateData])
     response = apic_connect(URL,'PUT',json_data)
     response = response['response']
     return response['taskId'],response['url']
 
-def delete_ZTD_rule(deviceID):
+def delete_ZTD_rule(projectID,deviceID):
     """Delete a ZTD rule/device"""
-    URL = APIC_URL + 'ztd-site/device/%s' % deviceID
+    URL = APIC_URL + '/pnp-project/%s/device/%s' % (projectID,deviceID)
     response = apic_connect(URL,'DELETE')
 
-def get_all_devices(siteID):
+def get_all_devices(projectID):
     """Get all devices stored under siteID"""
-    URL = APIC_URL + 'ztd-site/device?site_id=%s&offset=1&limit=500' % siteID
+    URL = APIC_URL + 'pnp-project/%s/device?offset=1&limit=500' % projectID
     response = apic_connect(URL)
     response = response['response']
     serialNumbers = {}
@@ -231,12 +237,12 @@ def get_all_devices(siteID):
 
 def delete_all_devices_in_site(siteName):
     """Delete all devices in a Site"""
-    siteID = get_siteID(siteName)
-    URL = APIC_URL + 'ztd-site/device?site_id=%s&offset=1&limit=500' % siteID
+    projectID = get_siteID(siteName)
+    URL = APIC_URL + 'pnp-project/%s/device?offset=1&limit=500' % projectID
     response = apic_connect(URL)
     response = response['response']
     for device in response:
-        delete_ZTD_rule(device['id'])
+        delete_ZTD_rule(projectID,device['id'])
 
 def get_all_configs():
     """Get names and fileIDs of all configs stored in APIC-EM"""
@@ -324,7 +330,8 @@ def main(params):
             # create new site if it doesn't exist yet
             if not sites_in_apic.get(site,False):
                 print_debug('Creating new site %s' % site)
-                create_site(site)
+                sitedata = create_site(site)
+                sites_in_apic[site] = sitedata
                 devices_in_site[site] = ({},{})
             else:
                 # get all devices already present in site
@@ -337,6 +344,7 @@ def main(params):
         #if my_file already exists in configs then re-upload under same id, else upload new config
         configID = configs_in_apic.get(my_file,None)
         configID = upload_config(my_file,file_content,configID)
+        projectID = sites_in_apic[site]['id']
         if devices_in_site[site][0].get(serial) == hostname:
             print_debug('  Device already exists in APIC-EM')
         elif devices_in_site[site][0].get(serial) and devices_in_site[site][0].get(serial) != hostname:
@@ -344,14 +352,14 @@ def main(params):
             old_hostname = devices_in_site[site][0][serial]
             print_debug('  Old hostname: %s' % old_hostname)
             deviceID = devices_in_site[site][1][old_hostname]['id']
-            taskID, taskURL = update_ZTD_rule(deviceID,{'hostName':hostname})
+            taskID, taskURL = update_ZTD_rule(projectID,deviceID,{'hostName':hostname})
             taskData['taskID'] = taskID
             tasks.append(taskData)
         else:
             if devices_in_site[site][1].get(hostname):
                 print_debug('  New serial number for hostname, deleting old entry')
                 delete_ZTD_rule(devices_in_site[site][1][hostname]['id'])
-            taskID, taskURL = create_ZTD_rule(site, serial, hostname, model, configID, imageID)
+            taskID, taskURL = create_ZTD_rule(projectID, site, serial, hostname, model, configID, imageID)
             taskData['taskID'] = taskID
             tasks.append(taskData)
     #Check if tasks were successfull
@@ -361,7 +369,10 @@ def main(params):
     for task in tasks:
         print_debug('Checking task for device %s (%s) in site %s...' % (task['hostname'],task['serial'],task['site']))
         response = check_task(taskID)
-        progress = json.loads(response['progress'])
+        try:
+            progress = json.loads(response['progress'])
+        except:
+            progress = response['progress']
         if type(progress) == type({}) and progress.get('message'):
             progress = progress.get('message')
         print_debug('  Progress: %s' % progress)
