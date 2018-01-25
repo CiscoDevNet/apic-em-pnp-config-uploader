@@ -201,7 +201,7 @@ def create_ZTD_rule(projectID, siteName, serialNumber, deviceName, productID, co
     data = [{"hostName": deviceName,"serialNumber": serialNumber, 
             "platformId": productID,"site": siteName, "configId": configID, "pkiEnabled": False}]
     if imageID:
-        data['imageId'] = imageID
+        data[0]['imageId'] = imageID
     json_data = json.dumps(data)
     response = apic_connect(URL,'POST',json_data)
     response = response['response']
